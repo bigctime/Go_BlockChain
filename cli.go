@@ -21,6 +21,7 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  reindexutxo - Rebuilds the UTXO set")
 	fmt.Println("  send -from FROM -to TO -amount AMOUNT -mine - Send AMOUNT of coins from FROM address to TO. Mine on the same node, when -mine is set.")
 	fmt.Println("  startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining")
+	fmt.Println("  sendbycommittee -from FROM -to TO -amount AMOUNT -port PORT - Send AMOUNT of coins from FROM address to TO By Committee")
 }
 
 func (cli *CLI) validateArgs() {
@@ -48,6 +49,7 @@ func (cli *CLI) Run() {
 	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
+	sendCommittee := flag.NewFlagSet("sendbycommittee",flag.ExitOnError)
 
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
@@ -56,6 +58,11 @@ func (cli *CLI) Run() {
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
+
+	sendComFrom := sendCommittee.String("from", "", "Committee Source wallet address")
+	sendComTo := sendCommittee.String("to", "", "Committee Destination wallet address")
+	sendComAmount := sendCommittee.Int("amount", 0, "Amount to send")
+	sendComPort := sendCommittee.String("port","","Committee port")
 
 	switch os.Args[1] {
 	case "getbalance":
@@ -90,6 +97,11 @@ func (cli *CLI) Run() {
 		}
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "sendCommittee":
+		err := sendCommittee.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -142,6 +154,15 @@ func (cli *CLI) Run() {
 		}
 
 		cli.send(*sendFrom, *sendTo, *sendAmount, nodeID, *sendMine)
+	}
+
+	if sendCommittee.Parsed() {
+		if *sendComFrom == "" || *sendComTo == "" || *sendComAmount <= 0 || *sendComPort == "" {
+			sendCommittee.Usage()
+			os.Exit(1)
+		}
+
+		cli.sendByCommittee(*sendComFrom, *sendComTo, *sendComAmount, nodeID, *sendComPort)
 	}
 
 	if startNodeCmd.Parsed() {

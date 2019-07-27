@@ -15,6 +15,8 @@ import (
 	"log"
 )
 
+//这个就是定义了挖矿的奖励
+//即，奖励10个币
 const subsidy = 10
 
 // Transaction represents a Bitcoin transaction
@@ -25,6 +27,11 @@ type Transaction struct {
 }
 
 // IsCoinbase checks whether the transaction is coinbase
+/**
+ coinbase 交易是一种特殊的交易，它不需要引用之前一笔交易的输出。
+ 它“凭空”产生了币（也就是产生了新币），这也是矿工获得挖出新块的奖励，
+ 可以理解为“发行新币”。
+ */
 func (tx Transaction) IsCoinbase() bool {
 	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
 }
@@ -55,6 +62,12 @@ func (tx *Transaction) Hash() []byte {
 }
 
 // Sign signs each input of a Transaction
+/**
+要签名以下数据：
+  存储在已解锁输出的公钥哈希。它识别了一笔交易的“发送方”。
+  存储在新的锁定输出里面的公钥哈希。它识别了一笔交易的“接收方”。
+  新的输出值。
+ */
 func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.IsCoinbase() {
 		return
@@ -173,6 +186,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 }
 
 // NewCoinbaseTX creates a new coinbase transaction
+//创建一个 coinbase 交易
 func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
 		randData := make([]byte, 20)
@@ -193,6 +207,7 @@ func NewCoinbaseTX(to, data string) *Transaction {
 }
 
 // NewUTXOTransaction creates a new transaction
+//一种通用的交易 发送交易
 func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
@@ -210,7 +225,7 @@ func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet)
 		if err != nil {
 			log.Panic(err)
 		}
-
+		//这个input没有签名吗？  上一个函数已经验证过了
 		for _, out := range outs {
 			input := TXInput{txID, out, nil, wallet.PublicKey}
 			inputs = append(inputs, input)
@@ -221,11 +236,12 @@ func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet)
 	from := fmt.Sprintf("%s", wallet.GetAddress())
 	outputs = append(outputs, *NewTXOutput(amount, to))
 	if acc > amount {
-		outputs = append(outputs, *NewTXOutput(acc-amount, from)) // a change
+		outputs = append(outputs, *NewTXOutput(acc-amount, from)) // a change 找零
 	}
 
 	tx := Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
+	//使用钱包私钥进行签名
 	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
 
 	return &tx

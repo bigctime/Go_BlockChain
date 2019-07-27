@@ -5,6 +5,11 @@ import (
 	"log"
 )
 
+/**
+发送交易
+sendTx(knownNodes[0], tx)
+总是向127.0.0.1:3000发送数据
+ */
 func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 	if !ValidateAddress(from) {
 		log.Panic("ERROR: Sender address is not valid")

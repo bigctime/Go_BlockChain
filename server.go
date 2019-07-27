@@ -40,6 +40,11 @@ type getdata struct {
 	ID       []byte
 }
 
+/**
+向其他节点展示当前节点有什么块和交易
+它没有包含完整的区块链和交易，仅仅是哈希而已。
+Type 字段表明了这是块还是交易。
+ */
 type inv struct {
 	AddrFrom string
 	Type     string
@@ -51,12 +56,19 @@ type tx struct {
 	Transaction []byte
 }
 
+/**
+由于我们仅有一个区块链版本，所以 Version 字段实际并不会存储什么重要信息;
+BestHeight 存储区块链中节点的高度;
+AddFrom 存储发送者的地址.
+ */
 type verzion struct {
 	Version    int
 	BestHeight int
 	AddrFrom   string
 }
 
+//前 12 个字节指定了命令名
+//将string型的命令转换成bytes型的
 func commandToBytes(command string) []byte {
 	var bytes [commandLength]byte
 
@@ -67,6 +79,7 @@ func commandToBytes(command string) []byte {
 	return bytes[:]
 }
 
+//将命令bytes型的 转换成 string型的
 func bytesToCommand(bytes []byte) string {
 	var command []byte
 
@@ -106,10 +119,12 @@ func sendBlock(addr string, b *Block) {
 	sendData(addr, request)
 }
 
+//发送数据
 func sendData(addr string, data []byte) {
 	conn, err := net.Dial(protocol, addr)
 	if err != nil {
 		fmt.Printf("%s is not available\n", addr)
+		fmt.Println("knownNodes 真的添加了新的节点信息了吗？？")
 		var updatedNodes []string
 
 		for _, node := range knownNodes {
@@ -119,6 +134,7 @@ func sendData(addr string, data []byte) {
 		}
 
 		knownNodes = updatedNodes
+		fmt.Println("updatedNodes knownNodes is",knownNodes)
 
 		return
 	}
@@ -160,6 +176,7 @@ func sendTx(addr string, tnx *Transaction) {
 	sendData(addr, request)
 }
 
+//请求 拉取最新的区块
 func sendVersion(addr string, bc *Blockchain) {
 	bestHeight := bc.GetBestHeight()
 	payload := gobEncode(verzion{nodeVersion, bestHeight, nodeAddress})
@@ -185,6 +202,11 @@ func handleAddr(request []byte) {
 	requestBlocks()
 }
 
+/**
+当接收到一个新块时，我们把它放到区块链里面。
+如果还有更多的区块需要下载，我们继续从上一个下载的块的那个节点继续请求。
+当最后把所有块都下载完后，对 UTXO 集进行重新索引
+ */
 func handleBlock(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload block
@@ -309,8 +331,11 @@ func handleTx(request []byte, bc *Blockchain) {
 
 	txData := payload.Transaction
 	tx := DeserializeTransaction(txData)
+
+	//如果当前节点（矿工）的内存池中有两笔或更多的交易，开始挖矿
 	mempool[hex.EncodeToString(tx.ID)] = tx
 
+	//在我们的实现中，中心节点并不会挖矿。它只会将新的交易推送给网络中的其他节点。
 	if nodeAddress == knownNodes[0] {
 		for _, node := range knownNodes {
 			if node != nodeAddress && node != payload.AddFrom {
@@ -343,6 +368,8 @@ func handleTx(request []byte, bc *Blockchain) {
 
 			fmt.Println("New block is mined!")
 
+			fmt.Println("I want to know allAddress is ",knownNodes)
+
 			for _, tx := range txs {
 				txID := hex.EncodeToString(tx.ID)
 				delete(mempool, txID)
@@ -361,10 +388,18 @@ func handleTx(request []byte, bc *Blockchain) {
 	}
 }
 
+//gob，由发送端使用Encoder对数据结构进行编码。
+//在接收端收到消息之后，接收端使用Decoder将序列化的数据变化成本地变量。
+/**
+节点将从消息中提取的 BestHeight 与自身进行比较。
+如果自身节点的区块链更长，它会回复 version 消息；
+否则，它会发送 getblocks 消息
+ */
 func handleVersion(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload verzion
 
+	//net.write向服务端发送请求数据？？？
 	buff.Write(request[commandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
@@ -387,6 +422,9 @@ func handleVersion(request []byte, bc *Blockchain) {
 	}
 }
 
+/**
+当一个节点接收到一个命令，它会运行 bytesToCommand 来提取命令名，并选择正确的处理器处理命令主体
+ */
 func handleConnection(conn net.Conn, bc *Blockchain) {
 	request, err := ioutil.ReadAll(conn)
 	if err != nil {
@@ -417,9 +455,12 @@ func handleConnection(conn net.Conn, bc *Blockchain) {
 	conn.Close()
 }
 
-// StartServer starts a node
+// StartServer starts a node  接收消息，开启一个服务器
+//minerAddress 参数指定了接收挖矿奖励的地址
 func StartServer(nodeID, minerAddress string) {
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
+	fmt.Print("Listen ID is " + nodeAddress)
+	fmt.Print("\n")
 	miningAddress = minerAddress
 	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
@@ -429,6 +470,9 @@ func StartServer(nodeID, minerAddress string) {
 
 	bc := NewBlockchain(nodeID)
 
+	//对中心节点的地址进行硬编码
+	//如果当前节点不是中心节点，它必须向中心节点发送 version 消息来查询是否自己的区块链已过时
+	fmt.Println("knownNodes is ",knownNodes)
 	if nodeAddress != knownNodes[0] {
 		sendVersion(knownNodes[0], bc)
 	}

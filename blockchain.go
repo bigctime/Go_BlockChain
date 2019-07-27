@@ -69,6 +69,7 @@ func CreateBlockchain(address, nodeID string) *Blockchain {
 }
 
 // NewBlockchain creates a new Blockchain with genesis Block
+//实现一个函数来创建有创世块的区块链
 func NewBlockchain(nodeID string) *Blockchain {
 	dbFile := fmt.Sprintf(dbFile, nodeID)
 	if dbExists(dbFile) == false {
@@ -266,6 +267,7 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 }
 
 // MineBlock mines a new block with the provided transactions
+//这段代码。就是将交易打包成块的代码
 func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 	var lastHash []byte
 	var lastHeight int

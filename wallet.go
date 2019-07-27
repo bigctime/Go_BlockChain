@@ -29,14 +29,15 @@ func NewWallet() *Wallet {
 }
 
 // GetAddress returns wallet address
+//一个公钥转换成一个 Base58 地址
 func (w Wallet) GetAddress() []byte {
 	pubKeyHash := HashPubKey(w.PublicKey)
 
-	versionedPayload := append([]byte{version}, pubKeyHash...)
-	checksum := checksum(versionedPayload)
+	versionedPayload := append([]byte{version}, pubKeyHash...)   //地址生成算法版本的前缀
+	checksum := checksum(versionedPayload)   //校验和是结果哈希的前四个字节。
 
 	fullPayload := append(versionedPayload, checksum...)
-	address := Base58Encode(fullPayload)
+	address := Base58Encode(fullPayload)   //Base58 对 version+PubKeyHash+checksum 组合进行编码。
 
 	return address
 }
@@ -67,6 +68,7 @@ func ValidateAddress(address string) bool {
 }
 
 // Checksum generates a checksum for a public key
+//校验和 是结果哈希的前四个字节。
 func checksum(payload []byte) []byte {
 	firstSHA := sha256.Sum256(payload)
 	secondSHA := sha256.Sum256(firstSHA[:])
@@ -74,6 +76,7 @@ func checksum(payload []byte) []byte {
 	return secondSHA[:addressChecksumLen]
 }
 
+//椭圆曲线，使用椭圆生成一个私钥，然后再从私钥生成一个公钥。
 func newKeyPair() (ecdsa.PrivateKey, []byte) {
 	curve := elliptic.P256()
 	private, err := ecdsa.GenerateKey(curve, rand.Reader)
